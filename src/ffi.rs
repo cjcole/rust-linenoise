@@ -1010,4 +1010,5 @@ extern "C" {
     pub fn linenoiseClearScreen();
     pub fn linenoiseSetMultiLine(ml: libc::c_int);
     pub fn linenoisePrintKeyCodes();
+    pub fn linenoiseInterrupt();
 }

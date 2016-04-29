@@ -185,3 +185,10 @@ fn internal_callback(cs: *mut libc::c_char, lc:*mut Completions ) {
         }
     }
 }
+
+/// Interrupts input
+pub fn interrupt() {
+    unsafe {
+        ffi::linenoiseInterrupt();
+    }
+}

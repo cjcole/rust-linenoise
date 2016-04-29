@@ -100,6 +100,7 @@
 
 #else /* _WIN32 */
 
+#include <assert.h>
 #include <signal.h>
 #include <termios.h>
 #include <unistd.h>
@@ -1195,6 +1196,23 @@ void InputBuffer::refreshLine(PromptBase& pi) {
 
 #ifndef _WIN32
 
+static int interruptPipe[2];
+
+void linenoiseInterrupt() {
+    char c = 0;
+    assert(write(interruptPipe[1], &c, 1) == 1);
+}
+
+#else /* _WIN32 */
+
+void linenoiseInterrupt() {
+    abort();
+}
+
+#endif
+
+#ifndef _WIN32
+
 /**
  * Read a UTF-8 sequence from the non-Windows keyboard and return the Unicode (char32_t) character it
  * encodes
@@ -1202,6 +1220,9 @@ void InputBuffer::refreshLine(PromptBase& pi) {
  * @return  char32_t Unicode character
  */
 static char32_t readUnicodeCharacter(void) {
+    if (interruptPipe[0] == 0) {
+        assert(pipe(interruptPipe) == 0);
+    }
     static char8_t utf8String[5];
     static size_t utf8Count = 0;
     while (true) {
@@ -1210,7 +1231,21 @@ static char32_t readUnicodeCharacter(void) {
         /* Continue reading if interrupted by signal. */
         ssize_t nread;
         do {
-            nread = read(0, &c, 1);
+            fd_set readSet;
+            FD_ZERO(&readSet); /* clear the set */
+            FD_SET(0, &readSet);
+            FD_SET(interruptPipe[0], &readSet);
+            int select_result = select(interruptPipe[0] + 1, &readSet, NULL, NULL, NULL);
+            if (select_result > 0) {
+                if (FD_ISSET(interruptPipe[0], &readSet)) {
+                    /* interrupted */
+                    assert(read(interruptPipe[0], &c, 1) == 1);
+                    return 0;
+                }
+                if (FD_ISSET(0, &readSet)) {
+                    nread = read(0, &c, 1);
+                }
+            }
         } while ((nread == -1) && (errno == EINTR));
 
         if (nread <= 0)
