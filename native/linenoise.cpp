@@ -1206,10 +1206,10 @@ void linenoiseInterrupt() {
 #else /* _WIN32 */
 
 void linenoiseInterrupt() {
-    abort();
+    abort(); // TODO
 }
 
-#endif
+#endif /* _WIN32 */
 
 #ifndef _WIN32
 
