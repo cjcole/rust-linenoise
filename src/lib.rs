@@ -49,6 +49,14 @@ use std::str;
 pub mod ffi;
 
 
+/// Sets the callback on interruption
+pub fn set_interrupt_callback(rust_cb: ffi::linenoiseInterruptCallback, ctx: *mut libc::c_void) {
+    unsafe {
+        ffi::linenoiseSetInterruptCallback(rust_cb, ctx);
+    }
+}
+
+
 pub type Completions = ffi::Struct_linenoiseCompletions;
 type Callback = ffi::linenoiseCompletionCallback;
 

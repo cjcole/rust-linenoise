@@ -715,6 +715,7 @@ class InputBuffer {
     int pos;           // character position in buffer ( 0 <= pos <= len )
 
     void clearScreen(PromptBase& pi);
+    void clearLines(PromptBase& pi);
     int incrementalHistorySearch(PromptBase& pi, int startChar);
     int completeLine(PromptBase& pi);
     void refreshLine(PromptBase& pi);
@@ -774,6 +775,8 @@ static const int PAGE_UP_KEY = 0x11000000;
 static const int PAGE_DOWN_KEY = 0x11200000;
 
 static const char* unsupported_term[] = {"dumb", "cons25", "emacs", NULL};
+static linenoiseInterruptCallback* interruptCallback = NULL;
+static void* interruptCallbackContext = NULL;
 static linenoiseCompletionCallback* completionCallback = NULL;
 
 #ifdef _WIN32
@@ -1194,22 +1197,20 @@ void InputBuffer::refreshLine(PromptBase& pi) {
     pi.promptCursorRowOffset = pi.promptExtraLines + yCursorPos;  // remember row for next pass
 }
 
+static bool gotInterrupt = false;
+
 #ifndef _WIN32
-
 static int interruptPipe[2];
-
-void linenoiseInterrupt() {
-    char c = 0;
-    assert(write(interruptPipe[1], &c, 1) == 1);
-}
-
-#else /* _WIN32 */
-
-void linenoiseInterrupt() {
-    abort(); // TODO
-}
-
 #endif /* _WIN32 */
+
+void linenoiseInterrupt() {
+#ifdef _WIN32
+    abort(); // TODO: implement for win32
+#else /* _WIN32 */
+    char c = 0;
+    write(interruptPipe[1], &c, 1);
+#endif /* _WIN32 */
+}
 
 #ifndef _WIN32
 
@@ -1239,7 +1240,8 @@ static char32_t readUnicodeCharacter(void) {
             if (select_result > 0) {
                 if (FD_ISSET(interruptPipe[0], &readSet)) {
                     /* interrupted */
-                    assert(read(interruptPipe[0], &c, 1) == 1);
+                    read(interruptPipe[0], &c, 1);
+                    gotInterrupt = true;
                     return 0;
                 }
                 if (FD_ISSET(0, &readSet)) {
@@ -2060,6 +2062,39 @@ void InputBuffer::clearScreen(PromptBase& pi) {
 }
 
 /**
+ * Clear the current line ONLY (no redisplay of anything)
+ */
+void linenoiseClearLines(int count) {
+#ifdef _WIN32
+    abort(); // TODO: implement for win32
+    COORD coord = {0, 0};
+    CONSOLE_SCREEN_BUFFER_INFO inf;
+    HANDLE screenHandle = GetStdHandle(STD_OUTPUT_HANDLE);
+    GetConsoleScreenBufferInfo(screenHandle, &inf);
+    SetConsoleCursorPosition(screenHandle, coord);
+    DWORD count;
+    FillConsoleOutputCharacterA(screenHandle, ' ', inf.dwSize.X * inf.dwSize.Y, coord, &count);
+#else
+    for (int i = 0; i < count; ++i) {
+        // clear the entire line
+        const char *seq = "\x1b[0G\x1b[J";
+        if (write(1, seq, strlen(seq)) <= 0)
+            return;
+        if (i < count - 1) {
+            // move cursor up one line
+            const char *seq2 = "\x1b[1A";
+            if (write(1, seq2, strlen(seq2)) == -1)
+              return;
+        }
+    }
+#endif
+}
+
+void InputBuffer::clearLines(PromptBase& pi) {
+    linenoiseClearLines(1 + pi.promptCursorRowOffset);
+}
+
+/**
  * Incremental history search -- take over the prompt and keyboard as the user types a search
  * string, deletes characters from it, changes direction, and either accepts the found line (for
  * execution orediting) or cancels.
@@ -2371,6 +2406,19 @@ int InputBuffer::getInputLine(PromptBase& pi) {
             c = linenoiseReadChar();  // get a new keystroke
 
 #ifndef _WIN32
+            if (c == 0 && gotInterrupt) {
+                // got an interrupt request
+                gotInterrupt = false;
+                if (interruptCallback) {
+                    // clear the prompt and current input
+                    clearLines(pi);
+                    interruptCallback(interruptCallbackContext);
+                    // now redraw the prompt and line
+                    pi.write();
+                    refreshLine(pi);
+                }
+                continue;
+            }
             if (c == 0 && gotResize) {
                 // caught a window resize event
                 // now redraw the prompt and line
@@ -3053,6 +3101,12 @@ char* linenoise(const char* prompt) {
     }
 }
 
+/* Register a callback function to be called on interruption. */
+void linenoiseSetInterruptCallback(linenoiseInterruptCallback* fn, void *ctx) {
+    interruptCallback = fn;
+    interruptCallbackContext = ctx;
+}
+
 /* Register a callback function to be called for tab-completion. */
 void linenoiseSetCompletionCallback(linenoiseCompletionCallback* fn) {
     completionCallback = fn;
@@ -3242,4 +3296,3 @@ int linenoiseInstallWindowChangeHandler(void) {
 #endif
     return 0;
 }
-

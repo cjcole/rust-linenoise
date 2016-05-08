@@ -973,6 +973,7 @@ pub struct Struct_linenoiseCompletions {
     pub cvec: *mut *mut libc::c_char,
 }
 
+pub type linenoiseInterruptCallback = extern fn(*mut libc::c_void);
 pub type linenoiseCompletionCallback = extern fn(*mut libc::c_char, *mut Struct_linenoiseCompletions);
 
 pub type linenoiseCompletions = Struct_linenoiseCompletions;
@@ -994,6 +995,10 @@ extern "C" {
     // pub static mut _CurrentRuneLocale: *mut _RuneLocale;
 }
 extern "C" {
+    pub fn linenoiseSetInterruptCallback(arg1:
+                                             linenoiseInterruptCallback,
+                                         arg:
+                                             *mut libc::c_void);
     pub fn linenoiseSetCompletionCallback(arg1:
                                               *mut linenoiseCompletionCallback);
     pub fn linenoiseAddCompletion(arg1: *mut linenoiseCompletions,

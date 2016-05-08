@@ -46,6 +46,8 @@ extern "C" {
 
   typedef struct linenoiseCompletions linenoiseCompletions;
 
+  typedef void(linenoiseInterruptCallback)(void *);
+  void linenoiseSetInterruptCallback(linenoiseInterruptCallback* fn, void *ctx);
   typedef void(linenoiseCompletionCallback)(const char*, linenoiseCompletions*);
   void linenoiseSetCompletionCallback(linenoiseCompletionCallback* fn);
   void linenoiseAddCompletion(linenoiseCompletions* lc, const char* str);
@@ -59,6 +61,7 @@ extern "C" {
   int linenoiseHistoryLoad(const char* filename);
   void linenoiseHistoryFree(void);
   void linenoiseClearScreen(void);
+  void linenoiseClearLines(int);
   void linenoiseSetMultiLine(int ml);
   void linenoisePrintKeyCodes(void);
   /* the following is extension to the original linenoise API */
